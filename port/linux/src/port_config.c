@@ -75,9 +75,6 @@ static const struct config_setting config_settings[] =
 		"Xbox's 4:3." },
 	{ "display.vsync", _config_boolean, "true", "HALO_NO_VSYNC", _environment_set_is_false, _platform_all,
 		"Wait for the display between frames; false draws as fast as possible." },
-	{ "display.max_fps", _config_integer, "0", "HALO_MAX_FPS", _environment_value, _platform_desktop,
-		"With vsync off, the most frames a second: 0 for twice the display's\n"
-		"refresh rate, -1 for no limit (which can hang some Intel graphics)." },
 	{ "display.interpolation", _config_boolean, "true", "HALO_INTERPOLATION", _environment_value, _platform_all,
 		"Draw a frame for every display refresh, blending between the game's 30\n"
 		"ticks a second; false keeps the original 30 frames a second." },
@@ -89,29 +86,6 @@ static const struct config_setting config_settings[] =
 		"Draw the HUD (meters, counters, panels, motion sensor, reticles,\n"
 		"waypoints, scopes) from the high-res assets (8x the maps' bitmaps);\n"
 		"false draws the maps' own bitmaps." },
-	{ "display.high_res_text", _config_boolean, "true", "HALO_HIGH_RES_TEXT", _environment_value, _platform_all,
-		"Draw the menus' and HUD's text with the fonts in port/assets/fonts\n"
-		"(Overpass) at the display's resolution, and the menus' titles from\n"
-		"port/assets/titles; false draws the maps' bitmap fonts and titles." },
-	{ "display.player_names", _config_string, "\"all\"", "HALO_PLAYER_NAMES", _environment_value, _platform_all,
-		"In multiplayer, whose names are drawn above their heads: \"all\",\n"
-		"\"allies\", \"enemies\" or \"none\". An enemy's shows only while in sight\n"
-		"and not camouflaged." },
-	{ "display.player_name_scale", _config_real, "1.0", "HALO_PLAYER_NAME_SCALE", _environment_value, _platform_all,
-		"How large the players' names are drawn: 1.0 three quarters of the size of\n"
-		"the HUD's text, 0.25 to 4." },
-	{ "display.scoreboard_team_layout", _config_string, "\"teams\"", "HALO_SCOREBOARD_TEAM_LAYOUT", _environment_value,
-		_platform_all,
-		"How the scoreboard lists a team game's players: \"teams\" in a column for\n"
-		"each team (red on the left, blue on the right), \"score\" all in order of\n"
-		"score." },
-	{ "display.scoreboard_background", _config_boolean, "true", "HALO_SCOREBOARD_BACKGROUND", _environment_value,
-		_platform_all,
-		"Draw a panel behind the multiplayer scoreboard, for clearer text." },
-	{ "display.scoreboard_background_color", _config_string, "\"16, 16, 16, 150\"", "HALO_SCOREBOARD_BACKGROUND_COLOR",
-		_environment_value, _platform_all,
-		"The scoreboard panel's colour: \"red, green, blue, alpha\", each 0 to 255\n"
-		"(alpha 0 is see-through, 255 solid)." },
 
 	{ "audio.enabled", _config_boolean, "true", "HALO_NO_AUDIO", _environment_set_is_false, _platform_all,
 		"Play sound." },
@@ -127,6 +101,20 @@ static const struct config_setting config_settings[] =
 		"slowed and dragged along by a target. The last of the mouse and the\n"
 		"right stick to move decides. The bullets' autoaim (bent toward the\n"
 		"target) stays either way." },
+	{ "input.trackpad_mode", _config_string, "\"speed\"", "HALO_TRACKPAD_MODE", _environment_value, _platform_android,
+		"How a trackpad (a keyboard case's) or a mouse aims. \"speed\": as the\n"
+		"right stick, pushed as far as the finger moves fast, centred when it\n"
+		"stops. \"stick\": as the right stick, pushed as far as the finger is\n"
+		"from where it touched down, centred when it lifts. \"mouse\": the view\n"
+		"turns as far as the finger moves, as with a mouse on a computer.\n"
+		"\"off\": the game does not hold the pointer, and the trackpad does not\n"
+		"aim. The stick modes keep the controller's aim assist. One finger aims;\n"
+		"a click or a tap fires (a tap then a held touch keeps firing); two\n"
+		"fingers clicking or tapping throw a grenade; two fingers moving up or\n"
+		"down switch weapons." },
+	{ "input.trackpad_sensitivity", _config_real, "1.0", "HALO_TRACKPAD_SENSITIVITY", _environment_value, _platform_android,
+		"How far the trackpad pushes the stick, or turns the view, for the\n"
+		"finger's movement." },
 
 	{ "game.console_log", _config_string, "\"important\"", "HALO_CONSOLE_LOG", _environment_value, _platform_all,
 		"What the game's console shows on screen of what it logs: \"important\"\n"

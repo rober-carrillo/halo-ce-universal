@@ -8,7 +8,8 @@ first SDL gamepad when one is present. Further SDL gamepads take ports 1-3.
 
 Keyboard and mouse (port 0):
 	W A S D          left stick          arrows           D-pad
-	mouse            aim (see halo_linux_mouse_look)
+	mouse            aim (see halo_linux_mouse_look; on Android, by default,
+	                 the right stick: see "the trackpad as the right stick")
 	left button      right trigger       right button, G  left trigger
 	space, enter     A                   F, backspace, X1 B
 	E, R             X                   tab, wheel       Y
@@ -87,6 +88,91 @@ static Uint64 stick_aimed_ms = 0;
 worn stick's drift */
 #define STICK_AIMING_DEFLECTION 8000
 
+#ifdef HALO_ANDROID
+/* ---------- the trackpad as the right stick
+
+TrackpadSurface.java turns a captured trackpad into the relative mouse: its
+motion in thousandths of the pad's width, and the X2 button held while a
+finger is on it. input.trackpad_mode decides what that motion does:
+	speed   the right stick, pushed as far as the finger moves fast
+	stick   the right stick, pushed as far as the finger is from where it
+	        touched down (a virtual stick), centred when it lifts
+	mouse   direct aim, as the mouse on a computer (halo_linux_mouse_look)
+	off     the pointer is not held (sdl_platform.c), and nothing aims
+A mouse goes the same way. As the right stick, the controller's aim assist
+stays (the stick moved last: halo_linux_mouse_aiming), and the game's dead
+zone (GAMEPAD_STICK_DEAD_RANGE, input_xbox.c) is stepped over, so the least
+movement turns the view. */
+
+enum
+{
+	_trackpad_speed,
+	_trackpad_stick,
+	_trackpad_mouse,
+	_trackpad_off
+};
+
+/* the game's dead zone on each stick axis */
+#define TRACKPAD_DEAD_RANGE 9000
+/* speed: pad widths a second for the stick pushed all the way, and how fast
+the stick follows the finger's speed (it smooths the motion's bursts) */
+#define TRACKPAD_FULL_SPEED 1.5f
+#define TRACKPAD_SPEED_SMOOTHING_MS 35.0f
+/* stick: thousandths of the pad's width from the touch for the stick pushed
+all the way, and the stick's rest (a fraction of that) */
+#define TRACKPAD_STICK_RANGE 150.0f
+#define TRACKPAD_STICK_REST 0.08f
+/* deflections smaller than this are none (the speed's tail, a finger's
+tremble) */
+#define TRACKPAD_LEAST_DEFLECTION 0.03f
+
+static float trackpad_pending_x, trackpad_pending_y;
+static BOOL trackpad_finger = FALSE;
+static float trackpad_offset_x, trackpad_offset_y;
+static float trackpad_speed_x, trackpad_speed_y;
+static Uint64 trackpad_polled_ms = 0;
+
+static int trackpad_mode(void)
+{
+	static int mode = -1;
+
+	if (mode < 0)
+	{
+		const char *setting = config_string("input.trackpad_mode");
+
+		if (!strcmp(setting, "stick"))
+			mode = _trackpad_stick;
+		else if (!strcmp(setting, "mouse"))
+			mode = _trackpad_mouse;
+		else if (!strcmp(setting, "off"))
+			mode = _trackpad_off;
+		else
+			mode = _trackpad_speed;
+	}
+	return mode;
+}
+
+static float trackpad_sensitivity(void)
+{
+	static float sensitivity = -1.0f;
+
+	if (sensitivity < 0.0f)
+	{
+		sensitivity = (float)config_real("input.trackpad_sensitivity");
+		if (sensitivity <= 0.0f)
+			sensitivity = 1.0f;
+	}
+	return sensitivity;
+}
+
+static BOOL trackpad_as_stick(void)
+{
+	int mode = trackpad_mode();
+
+	return mode == _trackpad_speed || mode == _trackpad_stick;
+}
+#endif
+
 static float mouse_sensitivity(void)
 {
 	static float sensitivity = -1.0f;
@@ -96,6 +182,9 @@ static float mouse_sensitivity(void)
 		sensitivity = (float)config_real("input.mouse_sensitivity");
 		if (sensitivity <= 0.0f)
 			sensitivity = 1.0f;
+#ifdef HALO_ANDROID
+		sensitivity *= trackpad_sensitivity();
+#endif
 	}
 	return sensitivity;
 }
@@ -162,16 +251,119 @@ static void mouse_poll(const struct platform_input_state *input)
 	}
 	if (!input->mouse_released)
 	{
-		mouse_pending_x += input->mouse_dx;
-		mouse_pending_y += input->mouse_dy;
-		if (input->mouse_dx != 0.0f || input->mouse_dy != 0.0f)
-			mouse_aimed_ms = SDL_GetTicks();
+#ifdef HALO_ANDROID
+		trackpad_finger = input->mouse_buttons[SDL_BUTTON_X2] != 0;
+		if (trackpad_as_stick())
+		{
+			/* to the right stick (trackpad_stick), not the direct aim */
+			trackpad_pending_x += input->mouse_dx;
+			trackpad_pending_y += input->mouse_dy;
+		}
+		else
+#endif
+		{
+			mouse_pending_x += input->mouse_dx;
+			mouse_pending_y += input->mouse_dy;
+			if (input->mouse_dx != 0.0f || input->mouse_dy != 0.0f)
+				mouse_aimed_ms = SDL_GetTicks();
+		}
 		mouse_wheel_accumulated += input->mouse_wheel;
 		if (input->mouse_wheel != 0.0f)
 			wheel_moved_ms = SDL_GetTicks();
 	}
 	pthread_mutex_unlock(&mouse_lock);
 }
+
+#ifdef HALO_ANDROID
+/* a deflection, -1 to 1, as a stick axis past the game's dead zone */
+static SHORT trackpad_axis(float deflection)
+{
+	float magnitude = fabsf(deflection);
+	float value;
+
+	if (magnitude < TRACKPAD_LEAST_DEFLECTION)
+		return 0;
+	if (magnitude > 1.0f)
+		magnitude = 1.0f;
+	value = TRACKPAD_DEAD_RANGE + magnitude * (32767.0f - TRACKPAD_DEAD_RANGE);
+	return (SHORT)(deflection < 0.0f ? -value : value);
+}
+
+/* the trackpad's motion since the last poll as port 0's right stick; a
+controller's stick pushed further wins (sdl_gamepad_state) */
+static void trackpad_stick(XINPUT_GAMEPAD *pad)
+{
+	Uint64 now = SDL_GetTicks();
+	float elapsed_ms, dx, dy, deflection_x, deflection_y;
+	BOOL finger;
+	SHORT value;
+
+	pthread_mutex_lock(&mouse_lock);
+	dx = trackpad_pending_x;
+	dy = trackpad_pending_y;
+	trackpad_pending_x = 0.0f;
+	trackpad_pending_y = 0.0f;
+	finger = trackpad_finger;
+	pthread_mutex_unlock(&mouse_lock);
+
+	elapsed_ms = trackpad_polled_ms ? (float)(now - trackpad_polled_ms) : 0.0f;
+	trackpad_polled_ms = now;
+	if (elapsed_ms < 1.0f)
+		elapsed_ms = 1.0f;
+	if (elapsed_ms > 100.0f)
+		elapsed_ms = 100.0f;
+
+	if (trackpad_mode() == _trackpad_stick)
+	{
+		float length;
+
+		if (!finger)
+		{
+			trackpad_offset_x = 0.0f;
+			trackpad_offset_y = 0.0f;
+			return;
+		}
+		trackpad_offset_x += dx;
+		trackpad_offset_y += dy;
+		/* held to the stick's reach, so moving back answers at once */
+		length = sqrtf(trackpad_offset_x * trackpad_offset_x + trackpad_offset_y * trackpad_offset_y);
+		if (length > TRACKPAD_STICK_RANGE / trackpad_sensitivity())
+		{
+			float scale = TRACKPAD_STICK_RANGE / trackpad_sensitivity() / length;
+
+			trackpad_offset_x *= scale;
+			trackpad_offset_y *= scale;
+		}
+		deflection_x = trackpad_offset_x * trackpad_sensitivity() / TRACKPAD_STICK_RANGE;
+		deflection_y = trackpad_offset_y * trackpad_sensitivity() / TRACKPAD_STICK_RANGE;
+		if (sqrtf(deflection_x * deflection_x + deflection_y * deflection_y) < TRACKPAD_STICK_REST)
+			return;
+	}
+	else
+	{
+		/* pad widths a second (the motion is in thousandths of the width),
+		smoothed, since the pad reports at its own rate */
+		float smoothing = 1.0f - expf(-elapsed_ms / TRACKPAD_SPEED_SMOOTHING_MS);
+
+		if (!finger && dx == 0.0f && dy == 0.0f)
+		{
+			trackpad_speed_x = 0.0f;
+			trackpad_speed_y = 0.0f;
+			return;
+		}
+		trackpad_speed_x += (dx / elapsed_ms - trackpad_speed_x) * smoothing;
+		trackpad_speed_y += (dy / elapsed_ms - trackpad_speed_y) * smoothing;
+		deflection_x = trackpad_speed_x * trackpad_sensitivity() / TRACKPAD_FULL_SPEED;
+		deflection_y = trackpad_speed_y * trackpad_sensitivity() / TRACKPAD_FULL_SPEED;
+	}
+
+	/* the pad's y grows downward; the stick's upward */
+	value = trackpad_axis(deflection_x);
+	if (abs(value) > abs(pad->sThumbRX)) pad->sThumbRX = value;
+	value = trackpad_axis(-deflection_y);
+	if (abs(value) > abs(pad->sThumbRY)) pad->sThumbRY = value;
+}
+#endif
 
 /* ---------- keyboard and mouse as a controller */
 
@@ -544,7 +736,13 @@ DWORD WINAPI XInputGetState(HANDLE device, PXINPUT_STATE state)
 		mouse_poll(&input);
 		wheel_update();
 		if (!console_is_active())
+		{
 			keyboard_gamepad(&input, &state->Gamepad);
+#ifdef HALO_ANDROID
+			if (trackpad_as_stick())
+				trackpad_stick(&state->Gamepad);
+#endif
+		}
 		if (count > 0)
 			sdl_gamepad_state(gamepads[0], &state->Gamepad);
 		test_input_gamepad(&state->Gamepad);

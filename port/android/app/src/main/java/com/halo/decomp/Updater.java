@@ -58,6 +58,10 @@ final class Updater {
     static void start(Activity activity) {
         File config = configFile(activity);
 
+        /* the releases are the official app's: an app under another id
+        (built from a fork) would only install that one beside itself */
+        if (!"com.halo.decomp".equals(BuildConfig.APPLICATION_ID))
+            return;
         if (BuildConfig.HALO_BUILD_NUMBER <= 0 || config == null || !autoUpdate(config))
             return;
         new Thread(() -> {

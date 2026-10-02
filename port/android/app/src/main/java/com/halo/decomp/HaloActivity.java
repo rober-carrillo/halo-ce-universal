@@ -7,6 +7,7 @@ import android.view.Display;
 import android.view.WindowManager;
 
 import org.libsdl.app.SDLActivity;
+import org.libsdl.app.SDLSurface;
 
 /**
  * The game: SDL3's activity, running libmain.so (port/android/host), which
@@ -19,6 +20,12 @@ public class HaloActivity extends SDLActivity {
     @Override
     protected String[] getLibraries() {
         return new String[] { "SDL3", "main" };
+    }
+
+    /** SDL's surface, plus a captured trackpad as a mouse (TrackpadSurface) */
+    @Override
+    protected SDLSurface createSDLSurface(Context context) {
+        return new TrackpadSurface(context);
     }
 
     @Override

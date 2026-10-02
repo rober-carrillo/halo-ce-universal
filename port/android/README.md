@@ -95,6 +95,38 @@ The controller gets the rumble. The back gesture of Android is the B
 button. A Bluetooth or USB keyboard operates as on Linux. The screen does
 not accept touch input.
 
+### Trackpad and mouse
+
+The game holds the pointer while it runs. A trackpad (for example the
+trackpad of a keyboard case) and a mouse then operate controller 1 with the
+keyboard:
+
+| Trackpad | Mouse | Controller | Function in the game |
+| --- | --- | --- | --- |
+| one finger moves | movement | right stick | look, aim |
+| click, or tap | left button | right trigger | fire |
+| tap, then touch and hold | | right trigger, held | fire without a stop |
+| click or tap with two fingers | right button | left trigger | throw a grenade |
+| two fingers move up or down | wheel | Y | change the weapon |
+
+`input.trackpad_mode` in `config.toml` sets how the movement aims:
+
+- `"speed"` (the default): the movement operates the right stick. The
+  stick goes as far as the finger moves fast, and comes back to the
+  center when the finger stops. The aim assist of the controller operates.
+- `"stick"`: the movement operates the right stick as a virtual stick. The
+  stick goes as far as the finger is from the point where it touched the
+  trackpad, and comes back to the center when the finger lifts.
+- `"mouse"`: the movement turns the view directly, as the mouse on Linux.
+- `"off"`: the game does not hold the pointer. The trackpad does not aim.
+
+`input.trackpad_sensitivity` (default `1.0`) changes how far the movement
+operates the stick or turns the view.
+
+`TrackpadSurface.java` changes the fingers of a trackpad to mouse events.
+`port/linux/src/xinput_sdl.c` changes the mouse movement to the right
+stick.
+
 ## Settings
 
 The settings are in `config.toml` in the data folder of the app. To change
