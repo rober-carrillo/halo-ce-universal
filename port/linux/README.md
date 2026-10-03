@@ -110,7 +110,7 @@ to 4.
 | left ctrl, C | left stick click | crouch |
 | Z, middle mouse button | right stick click | zoom |
 | arrow keys | D-pad | |
-| escape | start | pause menu |
+| escape, P | start | pause menu |
 | F1 | back | |
 | \` | | open the developer console |
 | F12 | | release or capture the mouse |

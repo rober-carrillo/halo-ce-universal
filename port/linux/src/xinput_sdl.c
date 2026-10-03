@@ -15,7 +15,7 @@ Keyboard and mouse (port 0):
 	E, R             X                   tab, wheel       Y
 	Q                white               X                black
 	left ctrl, C     left stick click    Z, middle button right stick click
-	escape           start               F1               back
+	escape, P        start               F1               back
 	F12              release or recapture the mouse
 
 In the menus the mouse is free and drives a pointer instead
@@ -408,7 +408,9 @@ static void keyboard_gamepad(const struct platform_input_state *input, XINPUT_GA
 	if (k[SDL_SCANCODE_DOWN]) pad->wButtons |= XINPUT_GAMEPAD_DPAD_DOWN;
 	if (k[SDL_SCANCODE_LEFT]) pad->wButtons |= XINPUT_GAMEPAD_DPAD_LEFT;
 	if (k[SDL_SCANCODE_RIGHT]) pad->wButtons |= XINPUT_GAMEPAD_DPAD_RIGHT;
-	if (k[SDL_SCANCODE_ESCAPE]) pad->wButtons |= XINPUT_GAMEPAD_START;
+	/* P too: keyboards without an escape key (tablet keyboard cases, whose
+	escape key is often backquote, which opens the console) */
+	if (k[SDL_SCANCODE_ESCAPE] || k[SDL_SCANCODE_P]) pad->wButtons |= XINPUT_GAMEPAD_START;
 	if (k[SDL_SCANCODE_F1]) pad->wButtons |= XINPUT_GAMEPAD_BACK;
 	if (k[SDL_SCANCODE_LCTRL] || k[SDL_SCANCODE_C]) pad->wButtons |= XINPUT_GAMEPAD_LEFT_THUMB;
 	if (k[SDL_SCANCODE_Z] || (mouse && m[SDL_BUTTON_MIDDLE])) pad->wButtons |= XINPUT_GAMEPAD_RIGHT_THUMB;
