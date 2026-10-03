@@ -99,17 +99,21 @@ not accept touch input.
 
 The game holds the pointer while it runs. A trackpad (for example the
 trackpad of a keyboard case) and a mouse then operate controller 1 with the
-keyboard:
+keyboard, together:
 
 | Trackpad | Mouse | Controller | Function in the game |
 | --- | --- | --- | --- |
-| one finger moves | movement | right stick | look, aim |
+| one finger moves | movement | right stick (trackpad); direct aim (mouse) | look, aim |
 | click, or tap | left button | right trigger | fire |
 | tap, then touch and hold | | right trigger, held | fire without a stop |
 | click or tap with two fingers | right button | left trigger | throw a grenade |
 | two fingers move up or down | wheel | Y | change the weapon |
+| | middle button | right stick click | zoom |
+| | side buttons | B | melee |
 
-`input.trackpad_mode` in `config.toml` sets how the movement aims:
+The mouse turns the view directly, as on Linux (`input.mouse_sensitivity`,
+`input.invert_mouse`). `input.trackpad_mode` in `config.toml` sets how the
+trackpad aims:
 
 - `"speed"` (the default): the movement operates the right stick. The
   stick goes as far as the finger moves fast, and comes back to the
@@ -117,14 +121,17 @@ keyboard:
 - `"stick"`: the movement operates the right stick as a virtual stick. The
   stick goes as far as the finger is from the point where it touched the
   trackpad, and comes back to the center when the finger lifts.
-- `"mouse"`: the movement turns the view directly, as the mouse on Linux.
-- `"off"`: the game does not hold the pointer. The trackpad does not aim.
+- `"mouse"`: the movement turns the view directly, as the mouse.
+- `"off"`: the game does not hold the pointer. The trackpad and the mouse
+  do not aim.
 
 `input.trackpad_sensitivity` (default `1.0`) changes how far the movement
 operates the stick or turns the view.
 
-`TrackpadSurface.java` changes the fingers of a trackpad to mouse events.
-`port/linux/src/xinput_sdl.c` changes the mouse movement to the right
+`TrackpadSurface.java` asks Android to hold the pointer until it does, and
+gives SDL the events of a held trackpad and mouse (SDL drops most of
+them). The X2 button is held while a finger is on the trackpad.
+`port/linux/src/xinput_sdl.c` changes the trackpad's movement to the right
 stick.
 
 ## Settings

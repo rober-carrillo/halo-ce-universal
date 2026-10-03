@@ -31,8 +31,9 @@ import org.libsdl.app.SDLSurface;
  *   a tap, then a touch held: the left button held until that finger lifts
  *   (automatic weapons), still aiming as it moves;
  * - two fingers moving up or down: the wheel (switch weapons).
- * A mouse, and a trackpad that reports itself as a mouse, go on to SDL as
- * before.
+ * A held mouse goes to SDL here too (see "the mouse" below), since SDL drops
+ * most of what Android sends for one; the game tells the two apart by the X2
+ * button, held only while a finger is on the trackpad.
  */
 public class TrackpadSurface extends SDLSurface {
     /* SDL's mouse actions (SDL_androidmouse.c) */
@@ -64,8 +65,11 @@ public class TrackpadSurface extends SDLSurface {
     private int padDevice = -1;
     private float padWidth = 1.0f, padHeight = 1.0f;
 
-    /* the buttons this has pressed, as SDL last heard */
+    /* the buttons SDL last heard of, and those the trackpad and the mouse
+    hold (SDL hears the two together) */
     private int sentButtons;
+    private int padButtons;
+    private int mouseButtons;
 
     /* the touch: where the tracked finger(s) last were */
     private boolean haveBaseline;
@@ -168,10 +172,15 @@ public class TrackpadSurface extends SDLSurface {
 
     @Override
     public boolean onCapturedPointerEvent(MotionEvent event) {
-        if (!event.isFromSource(InputDevice.SOURCE_TOUCHPAD))
-            return super.onCapturedPointerEvent(event);
-        trackpad(event);
-        return true;
+        if (event.isFromSource(InputDevice.SOURCE_TOUCHPAD)) {
+            trackpad(event);
+            return true;
+        }
+        if (event.isFromSource(InputDevice.SOURCE_MOUSE_RELATIVE)) {
+            mouse(event);
+            return true;
+        }
+        return super.onCapturedPointerEvent(event);
     }
 
     @Override
@@ -197,7 +206,7 @@ public class TrackpadSurface extends SDLSurface {
             scrollAccumulated = 0.0f;
             setBaseline(event);
             if (tapReleasePending && event.getEventTime() - tapUpTime <= TAP_HOLD_WINDOW_MS &&
-                (sentButtons & FIRE) != 0) {
+                (padButtons & FIRE) != 0) {
                 /* tap, then hold: the tap's click stays down */
                 handler.removeCallbacks(tapRelease);
                 tapReleasePending = false;
@@ -326,14 +335,28 @@ public class TrackpadSurface extends SDLSurface {
         return range.getRange();
     }
 
-    /** presses or releases one button; SDL works out which from the change */
+    /** presses or releases one of the trackpad's buttons */
     private void setButton(int button, boolean down) {
-        if (down && (sentButtons & button) == 0) {
-            sentButtons |= button;
-            SDLActivity.onNativeMouse(sentButtons, ACTION_DOWN, 0.0f, 0.0f, true);
-        } else if (!down && (sentButtons & button) != 0) {
-            sentButtons &= ~button;
-            SDLActivity.onNativeMouse(sentButtons, ACTION_UP, 0.0f, 0.0f, true);
+        if (down)
+            padButtons |= button;
+        else
+            padButtons &= ~button;
+        syncButtons();
+    }
+
+    /** tells SDL of every button whose state changed, one at a time: SDL
+    works out which button an event is about from the change */
+    private void syncButtons() {
+        int wanted = padButtons | mouseButtons;
+
+        for (int bit = 1; bit <= MotionEvent.BUTTON_FORWARD; bit <<= 1) {
+            if ((wanted & bit) != 0 && (sentButtons & bit) == 0) {
+                sentButtons |= bit;
+                SDLActivity.onNativeMouse(sentButtons, ACTION_DOWN, 0.0f, 0.0f, true);
+            } else if ((wanted & bit) == 0 && (sentButtons & bit) != 0) {
+                sentButtons &= ~bit;
+                SDLActivity.onNativeMouse(sentButtons, ACTION_UP, 0.0f, 0.0f, true);
+            }
         }
     }
 
@@ -343,8 +366,55 @@ public class TrackpadSurface extends SDLSurface {
         tapHeld = false;
         padPressed = false;
         haveBaseline = false;
-        setButton(FIRE, false);
-        setButton(GRENADE, false);
-        setButton(FINGER, false);
+        padButtons = 0;
+        mouseButtons = 0;
+        syncButtons();
+    }
+
+    /* ---------- the mouse
+
+    A held mouse comes as relative motion (ACTION_MOVE while a button is down,
+    ACTION_HOVER_MOVE otherwise, often several moves batched in one event),
+    ACTION_DOWN and ACTION_UP, ACTION_BUTTON_PRESS and _RELEASE, and
+    ACTION_SCROLL. SDL 3.4 passes on only the last of a batch's hover moves
+    and the scroll, so this passes on all of it: the motion as the relative
+    mouse (the game aims with it directly, as on a computer: xinput_sdl.c),
+    the buttons as the buttons, the side button as SDL's X1 (melee), and
+    the wheel. */
+
+    private void mouse(MotionEvent event) {
+        switch (event.getActionMasked()) {
+        case MotionEvent.ACTION_SCROLL:
+            SDLActivity.onNativeMouse(0, ACTION_SCROLL, event.getAxisValue(MotionEvent.AXIS_HSCROLL),
+                event.getAxisValue(MotionEvent.AXIS_VSCROLL), false);
+            return;
+        case MotionEvent.ACTION_MOVE:
+        case MotionEvent.ACTION_HOVER_MOVE: {
+            float dx = event.getX(0), dy = event.getY(0);
+            int history = event.getHistorySize();
+
+            for (int index = 0; index < history; index++) {
+                dx += event.getHistoricalX(0, index);
+                dy += event.getHistoricalY(0, index);
+            }
+            if (dx != 0.0f || dy != 0.0f)
+                SDLActivity.onNativeMouse(sentButtons, ACTION_MOVE, dx, dy, true);
+            break;
+        }
+        default:
+            break;
+        }
+
+        int state = event.getButtonState();
+        int buttons = state & (MotionEvent.BUTTON_PRIMARY | MotionEvent.BUTTON_SECONDARY |
+            MotionEvent.BUTTON_TERTIARY);
+
+        /* (the trackpad's finger is SDL's X2: both side buttons are X1) */
+        if ((state & (MotionEvent.BUTTON_BACK | MotionEvent.BUTTON_FORWARD)) != 0)
+            buttons |= MotionEvent.BUTTON_FORWARD;
+        if (buttons != mouseButtons) {
+            mouseButtons = buttons;
+            syncButtons();
+        }
     }
 }

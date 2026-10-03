@@ -118,9 +118,9 @@ static const struct config_setting config_settings[] =
 	{ "audio.volume", _config_real, "1.0", "HALO_VOLUME", _environment_value, _platform_all,
 		"The volume of everything, 0.0 to 1.0." },
 
-	{ "input.mouse_sensitivity", _config_real, "1.0", "HALO_MOUSE_SENSITIVITY", _environment_value, _platform_desktop,
+	{ "input.mouse_sensitivity", _config_real, "1.0", "HALO_MOUSE_SENSITIVITY", _environment_value, _platform_all,
 		"How far the view turns for the mouse's movement." },
-	{ "input.invert_mouse", _config_boolean, "false", "HALO_MOUSE_INVERT", _environment_set_is_true, _platform_desktop,
+	{ "input.invert_mouse", _config_boolean, "false", "HALO_MOUSE_INVERT", _environment_set_is_true, _platform_all,
 		"Moving the mouse forward looks down." },
 	{ "input.mouse_aim_assist", _config_boolean, "false", "HALO_MOUSE_AIM_ASSIST", _environment_value, _platform_desktop,
 		"Magnetism while aiming with the mouse, as with a controller: the view\n"
@@ -128,16 +128,18 @@ static const struct config_setting config_settings[] =
 		"right stick to move decides. The bullets' autoaim (bent toward the\n"
 		"target) stays either way." },
 	{ "input.trackpad_mode", _config_string, "\"speed\"", "HALO_TRACKPAD_MODE", _environment_value, _platform_android,
-		"How a trackpad (a keyboard case's) or a mouse aims. \"speed\": as the\n"
+		"How a trackpad (a keyboard case's) aims. \"speed\": as the\n"
 		"right stick, pushed as far as the finger moves fast, centred when it\n"
 		"stops. \"stick\": as the right stick, pushed as far as the finger is\n"
 		"from where it touched down, centred when it lifts. \"mouse\": the view\n"
 		"turns as far as the finger moves, as with a mouse on a computer.\n"
-		"\"off\": the game does not hold the pointer, and the trackpad does not\n"
-		"aim. The stick modes keep the controller's aim assist. One finger aims;\n"
-		"a click or a tap fires (a tap then a held touch keeps firing); two\n"
-		"fingers clicking or tapping throw a grenade; two fingers moving up or\n"
-		"down switch weapons." },
+		"\"off\": the game does not hold the pointer, and neither the trackpad\n"
+		"nor a mouse aims. The stick modes keep the controller's aim assist.\n"
+		"One finger aims; a click or a tap fires (a tap then a held touch keeps\n"
+		"firing); two fingers clicking or tapping throw a grenade; two fingers\n"
+		"moving up or down switch weapons. A mouse aims directly in every mode\n"
+		"but \"off\" (input.mouse_sensitivity), and its buttons and wheel work\n"
+		"as on a computer." },
 	{ "input.trackpad_sensitivity", _config_real, "1.0", "HALO_TRACKPAD_SENSITIVITY", _environment_value, _platform_android,
 		"How far the trackpad pushes the stick, or turns the view, for the\n"
 		"finger's movement." },

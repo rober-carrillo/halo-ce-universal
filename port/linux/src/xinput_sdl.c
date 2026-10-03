@@ -99,7 +99,8 @@ finger is on it. input.trackpad_mode decides what that motion does:
 	        touched down (a virtual stick), centred when it lifts
 	mouse   direct aim, as the mouse on a computer (halo_linux_mouse_look)
 	off     the pointer is not held (sdl_platform.c), and nothing aims
-A mouse goes the same way. As the right stick, the controller's aim assist
+A mouse (its motion without X2) aims directly whatever the mode, as on a
+computer. As the right stick, the controller's aim assist
 stays (the stick moved last: halo_linux_mouse_aiming), and the game's dead
 zone (GAMEPAD_STICK_DEAD_RANGE, input_xbox.c) is stepped over, so the least
 movement turns the view. */
@@ -182,9 +183,6 @@ static float mouse_sensitivity(void)
 		sensitivity = (float)config_real("input.mouse_sensitivity");
 		if (sensitivity <= 0.0f)
 			sensitivity = 1.0f;
-#ifdef HALO_ANDROID
-		sensitivity *= trackpad_sensitivity();
-#endif
 	}
 	return sensitivity;
 }
@@ -252,8 +250,14 @@ static void mouse_poll(const struct platform_input_state *input)
 	if (!input->mouse_released)
 	{
 #ifdef HALO_ANDROID
-		trackpad_finger = input->mouse_buttons[SDL_BUTTON_X2] != 0;
-		if (trackpad_as_stick())
+		/* the trackpad's motion comes with X2 held (TrackpadSurface.java);
+		held at the last poll counts too, for the motion just before the
+		finger lifts */
+		BOOL finger = input->mouse_buttons[SDL_BUTTON_X2] != 0;
+		BOOL from_trackpad = finger || trackpad_finger;
+
+		trackpad_finger = finger;
+		if (from_trackpad && trackpad_as_stick())
 		{
 			/* to the right stick (trackpad_stick), not the direct aim */
 			trackpad_pending_x += input->mouse_dx;
@@ -262,8 +266,16 @@ static void mouse_poll(const struct platform_input_state *input)
 		else
 #endif
 		{
-			mouse_pending_x += input->mouse_dx;
-			mouse_pending_y += input->mouse_dy;
+			float scale = 1.0f;
+
+#ifdef HALO_ANDROID
+			/* (the trackpad aiming directly, input.trackpad_mode "mouse":
+			its motion is in thousandths of the pad's width) */
+			if (from_trackpad)
+				scale = trackpad_sensitivity();
+#endif
+			mouse_pending_x += input->mouse_dx * scale;
+			mouse_pending_y += input->mouse_dy * scale;
 			if (input->mouse_dx != 0.0f || input->mouse_dy != 0.0f)
 				mouse_aimed_ms = SDL_GetTicks();
 		}
