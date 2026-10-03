@@ -3,9 +3,12 @@ package com.halo.decomp;
 import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.view.InputDevice;
 import android.view.MotionEvent;
+import android.widget.Toast;
 
+import org.libsdl.app.HaloRelativeMouse;
 import org.libsdl.app.SDLActivity;
 import org.libsdl.app.SDLSurface;
 
@@ -94,6 +97,75 @@ public class TrackpadSurface extends SDLSurface {
         super(context);
     }
 
+    /* ---------- holding the pointer
+
+    SDL asks Android for pointer capture once, when the game turns the
+    relative mouse mode on, and Android ignores the request unless the window
+    has focus right then; nothing asks again, so the pointer can stay free all
+    the while: it shows, and the view stops turning at the screen's edge.
+    While SDL wants the pointer held and the window has focus, this asks
+    again until Android grants it; once, after a few seconds without it, it
+    says so. */
+
+    private static final long CAPTURE_CHECK_MS = 300;
+    private static final long CAPTURE_WARN_MS = 4000;
+    private long captureMissingSince;
+    private boolean captureWarned;
+    private boolean captureChecking;
+
+    private final Runnable captureCheck = new Runnable() {
+        @Override
+        public void run() {
+            if (!captureChecking)
+                return;
+            if (hasWindowFocus() && HaloRelativeMouse.wanted() && !hasPointerCapture()) {
+                long now = SystemClock.uptimeMillis();
+
+                if (captureMissingSince == 0) {
+                    captureMissingSince = now;
+                } else if (!captureWarned && now - captureMissingSince >= CAPTURE_WARN_MS) {
+                    captureWarned = true;
+                    Toast.makeText(getContext(), "Halo could not take hold of the mouse pointer: "
+                        + "turning stops at the screen's edge.", Toast.LENGTH_LONG).show();
+                }
+                requestPointerCapture();
+            } else {
+                captureMissingSince = 0;
+            }
+            handler.postDelayed(this, CAPTURE_CHECK_MS);
+        }
+    };
+
+    private void checkCaptureSoon() {
+        if (!captureChecking)
+            return;
+        handler.removeCallbacks(captureCheck);
+        handler.postDelayed(captureCheck, 50);
+    }
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        captureChecking = true;
+        checkCaptureSoon();
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        captureChecking = false;
+        handler.removeCallbacks(captureCheck);
+        super.onDetachedFromWindow();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasWindowFocus) {
+        super.onWindowFocusChanged(hasWindowFocus);
+        if (hasWindowFocus)
+            checkCaptureSoon();
+    }
+
+    /* ---------- the trackpad */
+
     @Override
     public boolean onCapturedPointerEvent(MotionEvent event) {
         if (!event.isFromSource(InputDevice.SOURCE_TOUCHPAD))
@@ -105,8 +177,10 @@ public class TrackpadSurface extends SDLSurface {
     @Override
     public void onPointerCaptureChange(boolean hasCapture) {
         super.onPointerCaptureChange(hasCapture);
-        if (!hasCapture)
+        if (!hasCapture) {
             releaseAll();
+            checkCaptureSoon();
+        }
     }
 
     private void trackpad(MotionEvent event) {

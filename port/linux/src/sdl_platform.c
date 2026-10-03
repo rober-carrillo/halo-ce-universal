@@ -935,7 +935,12 @@ void platform_pump_events(void)
 		case SDL_EVENT_WINDOW_FOCUS_GAINED:
 			input_state.focused = TRUE;
 			look_at_clipboard = TRUE;
-#ifndef HALO_ANDROID
+#ifdef HALO_ANDROID
+			/* (a request SDL failed is asked again; one Android ignored is
+			asked again by TrackpadSurface.java) */
+			if (!input_state.mouse_released && strcmp(config_string("input.trackpad_mode"), "off"))
+				platform_mouse_capture(TRUE);
+#else
 			if (!input_state.mouse_released && !input_state.ui_pointer)
 				platform_mouse_capture(TRUE);
 #endif
